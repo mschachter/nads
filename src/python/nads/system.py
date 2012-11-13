@@ -138,4 +138,5 @@ class IFUnit(System):
 
     def __init__(self, initial_params=dict(), initial_state=dict()):
         System.__init__(self, initial_params=initial_params, initial_state=initial_state)
+        self.position = [0.0, 0.0, 0.0]
 

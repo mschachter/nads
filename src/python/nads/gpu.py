@@ -1,10 +1,9 @@
-import copy
-import os
+import sys
+
 import numpy as np
 
 import pyopencl as cl
 
-from nads.system import IFUnit
 from nads.utils import read_cl
 
 
@@ -131,7 +130,7 @@ class GpuNetworkData(object):
 
             weight_index += wlen
 
-    def copy_to_gpu(self, cl_context):
+    def copy_to_gpu(self, cl_context, color_vbo = None):
 
         mf = cl.mem_flags
         self.unit_param_index_buf = cl.Buffer(cl_context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.unit_param_index)
@@ -146,6 +145,14 @@ class GpuNetworkData(object):
         self.conn_index_buf = cl.Buffer(cl_context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.conn_index)
         self.num_connections_buf = cl.Buffer(cl_context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.num_connections)
 
+        if color_vbo is not None:
+            self.color_buf = cl.GLBuffer(cl_context, mf.READ_WRITE, int(color_vbo.buffer))
+        else:
+            #initialize dummy color buffer (still takes up space!)
+            clrs = np.zeros([self.num_units, 3])
+            self.color_buf = cl.Buffer(cl_context, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=clrs)
+
+
     def update_state(self, cl_context, cl_queue, time):
         del self.next_state
         self.next_state = np.empty(self.num_unit_states, dtype='float32')
@@ -153,8 +160,8 @@ class GpuNetworkData(object):
         mf = cl.mem_flags
         cl.enqueue_copy(cl_queue, self.next_state, self.next_state_buf)
 
-        print 'self.next_state:'
-        print list(self.next_state)
+        #print 'self.next_state:'
+        #print list(self.next_state)
 
         self.state_buf.release()
         del self.state
@@ -169,8 +176,8 @@ class GpuNetworkData(object):
                 gpu_index = self.unit2gpu[suid]
                 state_index = self.unit_state_index[gpu_index]
                 self.state[state_index] = sval[sindex]
-        print 'self.state:'
-        print list(self.state)
+        #print 'self.state:'
+        #print list(self.state)
         self.state_buf = cl.Buffer(cl_context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.state)
 
     def clear(self):
@@ -196,10 +203,17 @@ class GpuNetworkData(object):
         self.num_connections_buf.release()
         del self.num_connections_buf
 
+        self.color_buf.release()
+        del self.color_buf
+
 
 class GpuNetwork(object):
 
-    def __init__(self, cl_context):
+    def __init__(self, cl_context=None, visualize=False):
+
+        if cl_context is None and not visualize:
+            cl_context = cl.create_some_context()
+
         self.units = []
         self.connections = {}
         self.stream_connections = {}
@@ -209,6 +223,8 @@ class GpuNetwork(object):
         self.streams = []
         self.stream_uids = {}
         self.time = 0.0
+        self.visualize = False
+        self.color_vbo = None
 
     def add_stream(self, istream):
         self.streams.append(istream)
@@ -252,7 +268,7 @@ class GpuNetwork(object):
 
         self.queue = cl.CommandQueue(self.cl_context)
 
-        self.network_data.copy_to_gpu(self.cl_context)
+        self.network_data.copy_to_gpu(self.cl_context, color_vbo=self.color_vbo)
 
         print 'unit2gpu,',self.network_data.unit2gpu
         print 'gpu2unit,',self.network_data.gpu2unit
@@ -272,17 +288,20 @@ class GpuNetwork(object):
     def step(self, step_size):
 
         global_size =  (len(self.units), )
-        self.program.unit_step(self.queue, global_size, None,
-                               self.network_data.unit_state_index_buf,
-                               self.network_data.unit_param_index_buf,
-                               self.network_data.state_buf,
-                               self.network_data.params_buf,
-                               self.network_data.unit_weight_index_buf,
-                               self.network_data.conn_index_buf,
-                               self.network_data.num_connections_buf,
-                               self.network_data.weights_buf,
-                               self.network_data.next_state_buf,
-                               np.float32(step_size))
+
+        kernel_args = [self.network_data.unit_state_index_buf,
+                       self.network_data.unit_param_index_buf,
+                       self.network_data.state_buf,
+                       self.network_data.params_buf,
+                       self.network_data.unit_weight_index_buf,
+                       self.network_data.conn_index_buf,
+                       self.network_data.num_connections_buf,
+                       self.network_data.weights_buf,
+                       self.network_data.next_state_buf,
+                       np.float32(step_size),
+                       self.network_data.color_buf]
+
+        self.program.unit_step(self.queue, global_size, None, *kernel_args)
 
         self.time += step_size
         self.network_data.update_state(self.cl_context, self.queue, self.time)
@@ -292,6 +311,25 @@ class GpuNetwork(object):
     def clear(self):
         self.network_data.clear()
 
+
+    def get_unit_positions(self):
+        """
+        Returns the (x,y,z) location of each unit in the order of self.units.
+        """
+        pos = np.ndarray([len(self.units), 3])
+        for k,u in enumerate(self.units):
+            pos[k, :] = u.position
+        return pos
+
+
+    def get_unit_colors(self):
+        """
+        Returns the (R,G,B) color of each unit in the order of self.units.
+        """
+        clr = np.ndarray([len(self.units), 3])
+        for k,u in enumerate(self.units):
+            clr[k, :] = [0.5, 0.5, 0.5]
+        return clr
 
 
 class ConstantInputStream(GpuInputStream):

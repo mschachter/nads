@@ -6,19 +6,21 @@ import matplotlib.pyplot as plt
 import pyopencl as cl
 from nads.gpu import GpuNetwork, ConstantInputStream
 from nads.system import IFUnit
+from nads.ui import NetworkWindow
 
-def test_if(nunits=10, sim_dur=0.500):
+def create_chain_if_net(nunits):
 
-    ctx = cl.create_some_context()
-    gpunet = GpuNetwork(ctx)
+    gpunet = GpuNetwork()
 
     instream = ConstantInputStream(1.25, 0.020, 0.150)
     gpunet.add_stream(instream)
 
     num_states = -1
     num_params = -1
+    dx = 0.05
     for k in range(nunits):
         u = IFUnit()
+        u.position = (k*dx, 0.0, 0.0)
         num_states = u.num_states
         num_params = u.num_params
         gpunet.add_unit(u)
@@ -31,6 +33,13 @@ def test_if(nunits=10, sim_dur=0.500):
         w = 1.00 / float(k+2)
         #gpunet.connect_stream(instream, 0, u, w)
         gpunet.connect(uprev, u, 10.5)
+
+    return gpunet,num_states,num_params
+
+
+def test_if(nunits=10, sim_dur=0.500):
+
+    gpunet,num_states,num_params = create_chain_if_net(nunits)
 
     gpunet.compile()
 
@@ -60,6 +69,13 @@ def test_if(nunits=10, sim_dur=0.500):
         plt.plot(t, v)
         #plt.plot(st, np.ones(len(st)), 'o')
     plt.axis('tight')
+
+
+def test_if_gl(nunits=10, step_size=0.000250):
+
+    gpunet,num_states,num_params = create_chain_if_net(nunits)
+    nw = NetworkWindow(gpunet, step_size=step_size)
+
 
 if __name__ == '__main__':
     test_if(nunits=1, sim_dur=0.020)

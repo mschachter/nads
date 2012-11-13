@@ -5,7 +5,8 @@ __kernel void unit_step(__global const int *state_index, __global const int *par
                         __global const int *weight_index, __global const int *conn_index,
                         __global const int *num_conns, __global const float *weights,
                         __global float *next_state,
-                        const float step_size)
+                        const float step_size,
+                        __global float3 *color)
 {
     const uint gpu_index = get_global_id(0);
 	const uint sindex = state_index[gpu_index];
@@ -51,5 +52,11 @@ __kernel void unit_step(__global const int *state_index, __global const int *par
         /* update membrane potential and spike state */
         next_state[sindex] = 0.0f;
         next_state[sindex+1] = v + step_size*( (-v / (R*C)) + (input / C));
+
+        /* update color */
+        float clr = v / (vthresh - vreset);
+        color[gpu_index].x = clr;
+        color[gpu_index].y = clr;
+        color[gpu_index].z = clr;
     }
 }
