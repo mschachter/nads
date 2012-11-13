@@ -6,6 +6,9 @@ import pyopencl as cl
 def read_cl(cl_name):
     cl_dir = os.path.join(get_root_dir(), 'src', 'cl')
     fname = os.path.join(cl_dir, cl_name)
+    if not os.path.exists(fname):
+        print 'Cannot open kernel .cl file: %s' % fname
+        return ''
     f = open(fname, 'r')
     cl_str = f.read()
     f.close()

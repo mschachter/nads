@@ -4,12 +4,8 @@ import numpy as np
 
 import pyopencl as cl
 
-from nads.config import get_root_dir
-
-
-
-KERNELS = {'TestUnit': read_cl(TestUnit.CL_FILE),
-           'IFUnit': read_cl(IFUnit.CL_FILE)}
+from nads.system import IFUnit
+from nads.utils import read_cl
 
 
 class GpuInputStream(object):
@@ -27,6 +23,9 @@ class GpuNetworkData(object):
         self.unit2gpu = {}
         self.gpu2unit = {}
 
+        self.num_unit_states = 0
+        self.num_unit_params = 0
+
         self.unit_param_index = None
         self.params = None
 
@@ -38,6 +37,7 @@ class GpuNetworkData(object):
         self.weights = None
         self.conn_index = None
         self.num_connections = None
+        self.kernel_names = {} #maps class name to .cl file name
 
         self.unit_types = {}
         self.stream_uids = {}
@@ -53,18 +53,18 @@ class GpuNetworkData(object):
         num_params = 0
         num_states = 0
         for u in units:
-            num_params += len(u.params)
-            num_states += len(u.state)
+            num_params += u.num_params
+            num_states += u.num_states
 
         self.stream_uids = stream_uids
         self.num_units = len(units)
-        self.num_params = num_params
-        self.num_states = num_states
+        self.num_unit_params = num_params
+        self.num_unit_states = num_states
 
         self.unit_state_index = np.zeros(self.num_units+len(self.stream_uids), dtype='int32')
         self.unit_param_index = np.zeros(self.num_units, dtype='int32')
-        self.state = np.zeros(self.num_states+len(self.stream_uids), dtype='float32')
-        self.params = np.zeros(self.num_params, dtype='float32')
+        self.state = np.zeros(self.num_unit_states+len(self.stream_uids), dtype='float32')
+        self.params = np.zeros(self.num_unit_params, dtype='float32')
 
         #assign states and parameters to the unit state and parameter arrays
         param_index = 0
@@ -79,14 +79,17 @@ class GpuNetworkData(object):
             if cname not in self.unit_types:
                 self.unit_types[cname] = []
             self.unit_types[cname].append(u.id)
+            if cname not in self.kernel_names:
+                self.kernel_names[cname] = u.get_kernel_name()
 
-            for m,s in enumerate(u.state):
-                self.state[state_index+m] = s
-            for m,pname in enumerate(u.param_order):
-                self.params[param_index+m] = u.params[pname]
+            s_end = state_index + u.num_states
+            self.state[state_index:s_end] = u.get_state_vector()
 
-            state_index += len(u.state)
-            param_index += len(u.params)
+            p_end = param_index + u.num_params
+            self.params[param_index:p_end] = u.get_param_vector()
+
+            state_index += u.num_states
+            param_index += u.num_params
 
         #map the stream inputs to gpu indices
         for k,((stream_id,stream_index),suid) in enumerate(self.stream_uids.iteritems()):
@@ -100,7 +103,7 @@ class GpuNetworkData(object):
         self.total_state_size = state_index
 
         #set up an array to store the next states
-        self.next_state = np.zeros(self.num_states)
+        self.next_state = np.zeros(self.num_unit_states, dtype='float32')
 
     def init_weights(self, weights):
 
@@ -126,7 +129,6 @@ class GpuNetworkData(object):
                 self.weights[weight_index+m] = weights[(pre_uid, uid)]
                 self.conn_index[weight_index+m] = pre_gpu_index
 
-
             weight_index += wlen
 
     def copy_to_gpu(self, cl_context):
@@ -146,16 +148,19 @@ class GpuNetworkData(object):
 
     def update_state(self, cl_context, cl_queue, time):
         del self.next_state
-        self.next_state = np.empty(self.num_states, dtype='float32')
+        self.next_state = np.empty(self.num_unit_states, dtype='float32')
 
         mf = cl.mem_flags
         cl.enqueue_copy(cl_queue, self.next_state, self.next_state_buf)
+
+        print 'self.next_state:'
+        print list(self.next_state)
 
         self.state_buf.release()
         del self.state
 
         self.state = np.zeros([self.total_state_size], dtype='float32')
-        self.state[:self.num_states] = self.next_state
+        self.state[:self.num_unit_states] = self.next_state
         for s in self.streams:
             sval = s.pull(time)
             for sindex in range(s.ndim):
@@ -164,6 +169,8 @@ class GpuNetworkData(object):
                 gpu_index = self.unit2gpu[suid]
                 state_index = self.unit_state_index[gpu_index]
                 self.state[state_index] = sval[sindex]
+        print 'self.state:'
+        print list(self.state)
         self.state_buf = cl.Buffer(cl_context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.state)
 
     def clear(self):
@@ -233,11 +240,13 @@ class GpuNetwork(object):
         self.network_data.init_units(self.units, self.streams, self.stream_uids)
         self.network_data.init_weights(self.connections)
 
-        if len(self.network_data.unit_types) > 1:
-            print 'ERROR: only homogeneous unit types are currently allowed!'
+        if len(self.network_data.kernel_names) > 1:
+            print 'ERROR: only homogeneous unit types (one kernel type) is currently allowed!'
             return
 
-        self.kernel_cl = KERNELS[self.network_data.unit_types.keys()[0]]
+        kernel_file =  self.network_data.kernel_names.values()[0]
+
+        self.kernel_cl = read_cl(kernel_file)
         self.program = cl.Program(self.cl_context, self.kernel_cl).build()
         self.kernel = self.program.all_kernels()[0]
 
