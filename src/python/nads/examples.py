@@ -17,10 +17,12 @@ def create_chain_if_net(nunits):
 
     num_states = -1
     num_params = -1
-    dx = 0.05
+    dx = 1.0
+    dy = 5e-6
+    dz = 5e-6
     for k in range(nunits):
         u = IFUnit()
-        u.position = (k*dx, 0.0, 0.0)
+        u.position = (0.0, (k+1)*dx, 0.0)
         num_states = u.num_states
         num_params = u.num_params
         gpunet.add_unit(u)

@@ -149,7 +149,7 @@ class GpuNetworkData(object):
             self.color_buf = cl.GLBuffer(cl_context, mf.READ_WRITE, int(color_vbo.buffer))
         else:
             #initialize dummy color buffer (still takes up space!)
-            clrs = np.zeros([self.num_units, 3])
+            clrs = np.zeros([self.num_units, 4])
             self.color_buf = cl.Buffer(cl_context, mf.READ_WRITE | mf.COPY_HOST_PTR, hostbuf=clrs)
 
 
@@ -318,7 +318,7 @@ class GpuNetwork(object):
         """
         pos = np.ndarray([len(self.units), 3])
         for k,u in enumerate(self.units):
-            pos[k, :] = u.position
+            pos[k, :3] = u.position
         return pos
 
 
@@ -326,9 +326,9 @@ class GpuNetwork(object):
         """
         Returns the (R,G,B) color of each unit in the order of self.units.
         """
-        clr = np.ndarray([len(self.units), 3])
+        clr = np.ndarray([len(self.units), 4])
         for k,u in enumerate(self.units):
-            clr[k, :] = [0.5, 0.5, 0.5]
+            clr[k, :] = [0.5, 0.5, 0.5, 1.0]
         return clr
 
 

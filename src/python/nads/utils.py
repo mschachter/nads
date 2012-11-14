@@ -47,7 +47,6 @@ def gl_init(width, height):
     #glEnable(GL_DEPTH_TEST)
     glMatrixMode(GL_MODELVIEW)
 
-
 """
 def gl_lights():
     glEnable(GL_LIGHTING)
@@ -82,33 +81,31 @@ def gl_lights():
     glMaterialfv(GL_BACK, GL_SHININESS, high_shininess);
 
 
+"""
 
 def gl_draw_line(v1, v2):
     glBegin(GL_LINES)
-    glVertex3f(v1.x, v1.y, v1.z)
-    glVertex3f(v2.x, v2.y, v2.z)
+    glVertex3f(v1[0], v1[1], v1[2])
+    glVertex3f(v2[0], v2[1], v2[2])
     glEnd()
 
 
 def gl_draw_axes():
     #X Axis
     glColor3f(1,0,0)    #red
-    v1 = Vec([0,0,0])
-    v2 = Vec([1,0,0])
-    draw_line(v1, v2)
+    v1 = [0,0,0]
+    v2 = [1,0,0]
+    gl_draw_line(v1, v2)
 
     #Y Axis
     glColor3f(0,1,0)    #green
-    v1 = Vec([0,0,0])
-    v2 = Vec([0,1,0])
-    draw_line(v1, v2)
+    v1 = [0,0,0]
+    v2 = [0,1,0]
+    gl_draw_line(v1, v2)
 
     #Z Axis
     glColor3f(0,0,1)    #blue
-    v1 = Vec([0,0,0])
-    v2 = Vec([0,0,1])
-    draw_line(v1, v2)
-"""
-
-
+    v1 = [0,0,0]
+    v2 = [0,0,1]
+    gl_draw_line(v1, v2)
 

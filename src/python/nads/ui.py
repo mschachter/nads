@@ -10,12 +10,16 @@ from pyopencl.tools import get_gl_sharing_context_properties
 
 import numpy as np
 
+from nads.utils import gl_draw_axes
+
 class NetworkWindow(object):
 
     def __init__(self, network, step_size=0.00025):
         """
             Creates a visualization window for a given network. The network cannot be compiled yet!
         """
+
+        self.network = network
 
         #set up timing parameters
         self.refresh_rate_ms = 30 #in ms
@@ -47,11 +51,28 @@ class NetworkWindow(object):
         glutMouseFunc(self.on_click)
         glutMotionFunc(self.on_mouse_motion)
 
+
         #this will call draw every 30 ms
         glutTimerFunc(self.refresh_rate_ms, self.timer, self.refresh_rate_ms)
 
         #setup OpenGL scene
         self.glinit()
+
+        #create position and color VBOs
+        unit_positions = self.network.get_unit_positions()
+        print 'unit_positions:'
+        print unit_positions
+        self.pos_vbo = vbo.VBO(data=unit_positions, usage=GL_DYNAMIC_DRAW, target=GL_ARRAY_BUFFER)
+        self.pos_vbo.bind()
+
+        unit_colors = self.network.get_unit_colors()
+        print 'unit_colors:'
+        print unit_colors
+        self.col_vbo = vbo.VBO(data=unit_colors, usage=GL_DYNAMIC_DRAW, target=GL_ARRAY_BUFFER)
+        self.col_vbo.bind()
+
+        self.network.visualize = True
+        self.network.color_vbo = self.col_vbo
 
         #create a CL context for the network to use
         plats = cl.get_platforms()
@@ -61,20 +82,7 @@ class NetworkWindow(object):
             props = [(cl.context_properties.PLATFORM, plats[0])] + get_gl_sharing_context_properties()
             cl_context = cl.Context(properties=props, devices=None)
 
-        self.network = network
         self.network.cl_context = cl_context
-
-        #create position and color VBOs
-        unit_positions = self.network.get_unit_positions()
-        self.pos_vbo = vbo.VBO(data=unit_positions, usage=GL_DYNAMIC_DRAW, target=GL_ARRAY_BUFFER)
-        self.pos_vbo.bind()
-
-        unit_colors = self.network.get_unit_colors()
-        self.col_vbo = vbo.VBO(data=unit_colors, usage=GL_DYNAMIC_DRAW, target=GL_ARRAY_BUFFER)
-        self.col_vbo.bind()
-
-        self.visualize = True
-        self.color_vbo = self.col_vbo
 
         #compile the network
         self.network.compile()
@@ -86,11 +94,11 @@ class NetworkWindow(object):
         glViewport(0, 0, self.width, self.height)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        gluPerspective(60., self.width / float(self.height), .1, 1000.)
+        #gluPerspective(60., self.width / float(self.height), .1, 1000.)
+        gluPerspective(60., self.width / float(self.height), .1, 10.)
         glMatrixMode(GL_MODELVIEW)
 
 
-    ###GL CALLBACKS
     def timer(self, t):
         glutTimerFunc(t, self.timer, t)
         glutPostRedisplay()
@@ -126,6 +134,7 @@ class NetworkWindow(object):
 
         #run network for a few iterations
         for k in range(self.num_steps_per_refresh):
+            #print 'Step %d... step size=%0.6f' % (k, self.step_size)
             self.network.step(self.step_size)
 
         #render
@@ -143,13 +152,13 @@ class NetworkWindow(object):
 
         #render the network
         glEnable(GL_POINT_SMOOTH)
-        glPointSize(2)
+        glPointSize(5)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
         #setup the VBOs
         self.col_vbo.bind()
-        glColorPointer(3, GL_FLOAT, 0, self.col_vbo)
+        glColorPointer(4, GL_FLOAT, 0, self.col_vbo)
 
         self.pos_vbo.bind()
         glVertexPointer(3, GL_FLOAT, 0, self.pos_vbo)
@@ -165,6 +174,6 @@ class NetworkWindow(object):
         glDisable(GL_BLEND)
 
         #draw the x, y and z axis as lines
-        #gl_draw_axes()
+        gl_draw_axes()
 
         glutSwapBuffers()
