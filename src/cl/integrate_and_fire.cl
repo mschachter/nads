@@ -31,6 +31,12 @@ __kernel void unit_step(__global const int *state_index, __global const int *par
         /* spike has occurred, reset membrane potential and set spike state to 1 */
         next_state[sindex] = 1.0f;
         next_state[sindex+1] = vreset;
+
+        color[gpu_index].x = 1.0;
+        color[gpu_index].y = 1.0;
+        color[gpu_index].z = 1.0f;
+        color[gpu_index].w = 1.0f;
+
     } else {
         /* integrate synaptic input */
 
@@ -54,19 +60,17 @@ __kernel void unit_step(__global const int *state_index, __global const int *par
         next_state[sindex+1] = v + step_size*( (-v / (R*C)) + (input / C));
 
         /* update color */
-
-        /*
-        float clr = v / (vthresh - vreset);
-        color[gpu_index].x = clr;
-        color[gpu_index].y = clr;
-        color[gpu_index].z = clr;
-        color[gpu_index].w = 1.0f;
-        */
-
-        color[gpu_index].x = 0.5f;
-        color[gpu_index].y = 0.5f;
-        color[gpu_index].z = 0.5f;
-        color[gpu_index].w = 1.0f;
-
+        if (v > 0.0f) {
+            float clr = v / (vthresh - vreset);
+            color[gpu_index].x = clr;
+            color[gpu_index].y = 0.0;
+            color[gpu_index].z = 1.0f - clr;
+            color[gpu_index].w = 1.0f;
+        } else {
+            color[gpu_index].x = 0.0;
+            color[gpu_index].y = 0.0;
+            color[gpu_index].z = 1.0f;
+            color[gpu_index].w = 1.0f;
+        }
     }
 }

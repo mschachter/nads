@@ -145,8 +145,12 @@ class GpuNetworkData(object):
         self.conn_index_buf = cl.Buffer(cl_context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.conn_index)
         self.num_connections_buf = cl.Buffer(cl_context, mf.READ_ONLY | mf.COPY_HOST_PTR, hostbuf=self.num_connections)
 
+        self.gl_objects = []
+
         if color_vbo is not None:
+            print 'Using color VBO...'
             self.color_buf = cl.GLBuffer(cl_context, mf.READ_WRITE, int(color_vbo.buffer))
+            self.gl_objects.append(self.color_buf)
         else:
             #initialize dummy color buffer (still takes up space!)
             clrs = np.zeros([self.num_units, 4])
@@ -287,6 +291,9 @@ class GpuNetwork(object):
 
     def step(self, step_size):
 
+        if len(self.network_data.gl_objects) > 0:
+            cl.enqueue_acquire_gl_objects(self.queue, self.network_data.gl_objects)
+
         global_size =  (len(self.units), )
 
         kernel_args = [self.network_data.unit_state_index_buf,
@@ -305,6 +312,10 @@ class GpuNetwork(object):
 
         self.time += step_size
         self.network_data.update_state(self.cl_context, self.queue, self.time)
+
+        if len(self.network_data.gl_objects) > 0:
+            cl.enqueue_release_gl_objects(self.queue, self.network_data.gl_objects)
+
         return self.network_data.state
 
 
@@ -316,7 +327,7 @@ class GpuNetwork(object):
         """
         Returns the (x,y,z) location of each unit in the order of self.units.
         """
-        pos = np.ndarray([len(self.units), 3])
+        pos = np.ndarray([len(self.units), 3], dtype='float32')
         for k,u in enumerate(self.units):
             pos[k, :3] = u.position
         return pos
@@ -326,7 +337,7 @@ class GpuNetwork(object):
         """
         Returns the (R,G,B) color of each unit in the order of self.units.
         """
-        clr = np.ndarray([len(self.units), 4])
+        clr = np.ndarray([len(self.units), 4], dtype='float32')
         for k,u in enumerate(self.units):
             clr[k, :] = [0.5, 0.5, 0.5, 1.0]
         return clr
@@ -346,5 +357,27 @@ class ConstantInputStream(GpuInputStream):
             return np.array([self.amp])
         else:
             return np.array([0.0])
+
+class RandomInputStream(GpuInputStream):
+
+    def __init__(self, mean, std, start, stop, positive=False):
+        GpuInputStream.__init__(self)
+        self.ndim = 1
+        self.start = start
+        self.stop = stop
+        self.mean = mean
+        self.std = std
+        self.positive = positive
+
+
+    def pull(self, t):
+        if t >= self.start and t < self.stop:
+            i = np.random.randn()*self.std + self.mean
+            if self.positive:
+                i = np.abs(i)
+            return np.array([i])
+        else:
+            return np.array([0.0])
+
 
 

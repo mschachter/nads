@@ -34,8 +34,10 @@ class NetworkWindow(object):
         self.translate = np.array([0., 0., 0.])
         self.initrans = np.array([0., 0., -2.])
 
-        self.width = 640
-        self.height = 480
+        self.width = 1024
+        self.height = 768
+
+        self.simulation_time = 0.0
 
         glutInit(sys.argv)
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
@@ -94,8 +96,7 @@ class NetworkWindow(object):
         glViewport(0, 0, self.width, self.height)
         glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
-        #gluPerspective(60., self.width / float(self.height), .1, 1000.)
-        gluPerspective(60., self.width / float(self.height), .1, 10.)
+        gluPerspective(60., self.width / float(self.height), .1, 1000.)
         glMatrixMode(GL_MODELVIEW)
 
 
@@ -136,6 +137,9 @@ class NetworkWindow(object):
         for k in range(self.num_steps_per_refresh):
             #print 'Step %d... step size=%0.6f' % (k, self.step_size)
             self.network.step(self.step_size)
+            self.simulation_time += self.step_size
+
+        #print 'Sim Time: %0.6f seconds' % self.simulation_time
 
         #render
         glFlush()
@@ -152,7 +156,7 @@ class NetworkWindow(object):
 
         #render the network
         glEnable(GL_POINT_SMOOTH)
-        glPointSize(5)
+        glPointSize(10)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
@@ -166,7 +170,8 @@ class NetworkWindow(object):
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_COLOR_ARRAY)
         #draw the VBOs
-        glDrawArrays(GL_POINTS, 0, len(self.network.units))
+        num_points = len(self.network.units)
+        glDrawArrays(GL_POINTS, 0, num_points)
 
         glDisableClientState(GL_COLOR_ARRAY)
         glDisableClientState(GL_VERTEX_ARRAY)
@@ -174,6 +179,6 @@ class NetworkWindow(object):
         glDisable(GL_BLEND)
 
         #draw the x, y and z axis as lines
-        gl_draw_axes()
+        #gl_draw_axes()
 
         glutSwapBuffers()
