@@ -13,7 +13,7 @@ def create_cube_if_net(width, height, depth):
 
     gpunet = GpuNetwork()
 
-    max_cube_width = 1.0
+    max_cube_width = 1.25
     mcw_half = max_cube_width / 2.0
 
     dx = max_cube_width / width

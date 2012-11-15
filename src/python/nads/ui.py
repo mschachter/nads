@@ -156,7 +156,7 @@ class NetworkWindow(object):
 
         #render the network
         glEnable(GL_POINT_SMOOTH)
-        glPointSize(10)
+        glPointSize(5)
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 

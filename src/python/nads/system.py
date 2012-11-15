@@ -129,9 +129,12 @@ class IFUnit(System):
     C = Param(shape=[1], default_value=1e-2, order=1)
     vthresh = Param(shape=[1], default_value=1.0, order=2)
     vreset = Param(shape=[1], default_value=0.0, order=3)
+    synapse_tau = Param(shape=[1], default_value=0.010, order=4)
 
-    spike_time = State(shape=[1], num_lags=0, default_value=0.0, order=0)
+    output = State(shape=[1], num_lags=0, default_value=0.0, order=0)
     v = State(shape=[1], num_lags=0, default_value=0.0, order=1)
+    spike_time = State(shape=[1], num_lags=0, default_value=0.0, order=2)
+
 
     def get_kernel_name(self):
         return 'integrate_and_fire.cl'

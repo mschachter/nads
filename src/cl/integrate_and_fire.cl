@@ -16,8 +16,11 @@ __kernel void unit_step(__global const int *state_index, __global const int *par
 	const float C = params[pindex+1]; /* capacitance */
 	const float vthresh = params[pindex+2];  /* membrane potential threshold */
 	const float vreset = params[pindex+3];   /* post-spike membrane potential reset */
+	const float syntau = params[pindex+4];   /* synaptic time constant */
 
+    const float output = state[sindex];
 	const float v = state[sindex+1];  /* membrane potential */
+	const float spike = state[sindex+2]; /* binary indicator for spike or no spike */
 
     const uint windex = weight_index[gpu_index];
     const uint nconn = num_conns[gpu_index];
@@ -29,8 +32,8 @@ __kernel void unit_step(__global const int *state_index, __global const int *par
 
     if (v > vthresh) {
         /* spike has occurred, reset membrane potential and set spike state to 1 */
-        next_state[sindex] = 1.0f;
         next_state[sindex+1] = vreset;
+        next_state[sindex+2] = 1.0f;
 
         color[gpu_index].x = 1.0;
         color[gpu_index].y = 1.0;
@@ -56,8 +59,8 @@ __kernel void unit_step(__global const int *state_index, __global const int *par
         }
 
         /* update membrane potential and spike state */
-        next_state[sindex] = 0.0f;
         next_state[sindex+1] = v + step_size*( (-v / (R*C)) + (input / C));
+        next_state[sindex+2] = 0.0f;
 
         /* update color */
         if (v > 0.0f) {
@@ -73,4 +76,7 @@ __kernel void unit_step(__global const int *state_index, __global const int *par
             color[gpu_index].w = 1.0f;
         }
     }
+
+    /* update synaptic output */
+    next_state[sindex] = output*(1 - syntau*step_size) + step_size*spike;
 }
